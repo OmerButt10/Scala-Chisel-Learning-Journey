@@ -1,59 +1,49 @@
 package Lab6
+
 import chisel3._
 import chisel3.util._
 
-class TwoShot(val max: UInt) extends Module {
+
+class TwoShotTimer extends Module {
   val io = IO(new Bundle {
-    val reset = Output(Bool())
+    val reload = Input(Bool())
+    val din = Input(UInt(8.W))
+    val out = Output(Bool())
   })
 
-   var timer = RegInit(6.U(32.W))
-   var count = RegInit(0.U(8.W))
-   dontTouch(count)
+  val idle :: firstShot :: secondShot :: Nil = Enum(3)
+  val state = RegInit(idle)
 
-//   // Default assignment for io.reset
-//   io.reset := false.B
+  val timer_count = RegInit(0.U(8.W))
+  val done = timer_count === 0.U
+  val next = WireInit(0.U)
 
-//   when(count === 1.U) {
-//       count := 2.U
-//       io.reset := 1.B
-//     }
-//   .elsewhen(count === 2.U){
-//     count := 0.U
-//   }
-
-
-
-//   when(timer =/= 0.U) {
-//       // Set io.reset when count is 2
-//       }
-//   .otherwise {
-//     io.reset := 1.B
-//     timer := max
-//     count := count + 1.U
-//   }
-// //   when(count === 1.U) {
-// //       count := 2.U
-// //       io.reset := 1.B
-// //     }
-// //   }
-// }
-
-
-io.reset:=false.B
-
-when(count === 1.U){
-  count := count + 1.U
-  io.reset := true.B
-}
-.otherwise{
-  io.reset := 0.U
-  timer :=  timer - 1.U
-
-  when(timer === 0.U){
-    timer := 6.U
-    count := 2.U
-    io.reset := true.B
+  switch(state) {
+    is(idle) {
+      when(io.reload) {
+        state := firstShot
+        next := io.din
+      }
+    }
+    is(firstShot) {
+      when(!done) {
+        next := timer_count - 1.U
+      }.otherwise {
+        state := secondShot
+        next := io.din
+      }
+    }
+    is(secondShot) {
+      when(!done) {
+        next := timer_count - 1.U
+      }.otherwise {
+        state := idle
+        next := 0.U
+      }
+    }
   }
-}
+
+  timer_count := next
+
+  io.out := state === secondShot && done
 }
